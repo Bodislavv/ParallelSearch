@@ -1,30 +1,40 @@
-#include <iostream>
+﻿#include <iostream>
 #include <vector>
-#include <cstdlib>
-#include <ctime>
 #include <climits>
-#include <algorithm>
-#include <random>
 #include <omp.h>
+#include <fstream>
+#include <string>
+
+const std::string FILENAME_1B = "array_1B.bin";
+const std::string FILENAME_500M = "array_500M.bin";
 
 int main() {
-    const long long TOTAL_ELEMENTS = 1000000000LL;
-    std::vector<int> elements(TOTAL_ELEMENTS);
+    std::vector<int> elements;
+    long long actual_total_elements = 0;
+    std::string filename_to_process;
 
-    double gen_start_time = omp_get_wtime();
+    int choice;
+    std::cout << "Choose array to process:" << std::endl;
+    std::cout << "1. Array (" << FILENAME_1B << ")" << std::endl;
+    std::cout << "2. Array (" << FILENAME_500M << ")" << std::endl;
+    std::cout << "Enter your choice (1 or 2): ";
+    std::cin >> choice;
 
-#pragma omp parallel
-    {
-        unsigned int seed = static_cast<unsigned int>(time(NULL)) ^ (omp_get_thread_num() << 16);
-        std::mt19937 generator(seed);
-        std::uniform_int_distribution<int> distribution(0, 1000000000);
-
-#pragma omp for schedule(static)
-        for (long long i = 0; i < TOTAL_ELEMENTS; ++i) {
-            elements[i] = distribution(generator);
-        }
+    if (choice == 1) {
+        filename_to_process = FILENAME_1B;
     }
-    double gen_end_time = omp_get_wtime();
+    else {
+        filename_to_process = FILENAME_500M;
+    }
+
+    std::ifstream infile(filename_to_process, std::ios::binary | std::ios::in);
+
+    infile.read(reinterpret_cast<char*>(&actual_total_elements), sizeof(actual_total_elements));
+    elements.resize(actual_total_elements);
+    if (actual_total_elements > 0) {
+        infile.read(reinterpret_cast<char*>(elements.data()), actual_total_elements * sizeof(int));
+    }
+    infile.close();
 
     double search_start_time = omp_get_wtime();
 
@@ -32,7 +42,7 @@ int main() {
     int global_max = INT_MIN;
 
 #pragma omp parallel for reduction(min:global_min) reduction(max:global_max) schedule(static)
-    for (long long i = 0; i < TOTAL_ELEMENTS; ++i) {
+    for (long long i = 0; i < actual_total_elements; ++i) {
         if (elements[i] < global_min) {
             global_min = elements[i];
         }
@@ -45,7 +55,7 @@ int main() {
 
     std::cout << "Global minimum: " << global_min << std::endl;
     std::cout << "Global maximum: " << global_max << std::endl;
-    std::cout << "Time taken for search: " << (search_end_time - search_start_time) << " seconds" << std::endl;
+    std::cout << "Time taken: " << (search_end_time - search_start_time) << " seconds" << std::endl;
 
     return 0;
 }
